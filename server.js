@@ -108,12 +108,22 @@ Respond ONLY with a valid JSON object matching this schema:
 
 app.post('/api/seance-chat', async (req, res) => {
   try {
+    console.log("SEANCE CHAT REQUEST BODY:", JSON.stringify(req.body));
     const { repoName, history = [] } = req.body;
-    const question = req.body.question || req.body.message || req.body.prompt;
-    if (!question) return res.status(400).json({ error: 'Question is required.' });
+
+    let question = req.body.question || req.body.message || req.body.prompt;
+    if (!question && Array.isArray(history) && history.length > 0) {
+      const lastMsg = history[history.length - 1];
+      if (lastMsg) question = lastMsg.content || lastMsg.text;
+    }
+
+    if (!question) {
+      return res.status(400).json({ error: 'Question is required.' });
+    }
 
     const cleanHistory = Array.isArray(history) 
       ? history
+          .slice(0, -1) // Exclude the last message if it was the question itself
           .map(msg => ({
             role: (msg.role || msg.sender) === 'user' ? 'user' : 'assistant',
             content: (msg.content || msg.text || '').trim()
@@ -127,7 +137,7 @@ app.post('/api/seance-chat', async (req, res) => {
         content: `You are the Ghost of the abandoned repo "${repoName || 'this repository'}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
       },
       ...cleanHistory,
-      { role: 'user', content: question.trim() }
+      { role: 'user', content: String(question).trim() }
     ];
 
     const completion = await groq.chat.completions.create({
