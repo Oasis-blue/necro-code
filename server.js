@@ -109,23 +109,24 @@ Respond ONLY with a valid JSON object matching this schema:
 app.post('/api/seance-chat', async (req, res) => {
   try {
     const { repoName, question, history = [] } = req.body;
-    
+    if (!question) return res.status(400).json({ error: 'Question is required.' });
+
     const cleanHistory = Array.isArray(history) 
       ? history
-          .filter(msg => msg && msg.text && (msg.sender === 'user' || msg.sender === 'ghost' || msg.role))
           .map(msg => ({
-            role: msg.role || (msg.sender === 'user' ? 'user' : 'assistant'),
-            content: msg.content || msg.text || ''
+            role: (msg.role || msg.sender) === 'user' ? 'user' : 'assistant',
+            content: (msg.content || msg.text || '').trim()
           }))
+          .filter(msg => msg.content.length > 0)
       : [];
 
     const messages = [
       { 
         role: 'system', 
-        content: `You are the Ghost of the abandoned repo "${repoName}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
+        content: `You are the Ghost of the abandoned repo "${repoName || 'this repository'}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
       },
       ...cleanHistory,
-      { role: 'user', content: question }
+      { role: 'user', content: question.trim() }
     ];
 
     const completion = await groq.chat.completions.create({
@@ -135,7 +136,7 @@ app.post('/api/seance-chat', async (req, res) => {
 
     res.json({ success: true, reply: completion.choices[0].message.content });
   } catch (err) {
-    console.error('Chat error:', err.message);
+    console.error('Chat error details:', err.message);
     res.status(500).json({ error: 'The spectral link was severed.' });
   }
 });
