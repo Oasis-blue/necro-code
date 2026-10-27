@@ -108,7 +108,8 @@ Respond ONLY with a valid JSON object matching this schema:
 
 app.post('/api/seance-chat', async (req, res) => {
   try {
-    const { repoName, question, history = [] } = req.body;
+    const { repoName, history = [] } = req.body;
+    const question = req.body.question || req.body.message || req.body.prompt;
     if (!question) return res.status(400).json({ error: 'Question is required.' });
 
     const cleanHistory = Array.isArray(history) 
