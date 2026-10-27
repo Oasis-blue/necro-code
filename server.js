@@ -4,12 +4,18 @@ const cors = require('cors');
 const Groq = require('groq-sdk');
 
 const app = express();
-app.use(cors());
+
+// Enable full CORS for all origins and headers
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Fetch public GitHub file contents
 async function fetchRepoDetails(owner, repo) {
   try {
     const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
@@ -20,12 +26,12 @@ async function fetchRepoDetails(owner, repo) {
     let packageJson = '';
 
     try {
-      const readmeRes = await fetch(`https://raw.githubusercontent.com/raw/${owner}/${repo}/main/README.md`);
+      const readmeRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`);
       readme = readmeRes.ok ? await readmeRes.text() : '';
     } catch (e) {}
 
     try {
-      const pkgRes = await fetch(`https://raw.githubusercontent.com/raw/${owner}/${repo}/main/package.json`);
+      const pkgRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/package.json`);
       packageJson = pkgRes.ok ? await pkgRes.text() : '';
     } catch (e) {}
 
@@ -42,13 +48,11 @@ async function fetchRepoDetails(owner, repo) {
   }
 }
 
-// Summon the Ghost of the Repo via Gemma 2 / Llama 3
 app.post('/api/summon', async (req, res) => {
   try {
     const { repoUrl } = req.body;
     if (!repoUrl) return res.status(400).json({ error: 'Provide a repo URL (e.g., owner/repo)' });
 
-    // Clean input to get owner/repo
     const cleanPath = repoUrl.replace('https://github.com/', '').replace('.git', '').trim();
     const [owner, repo] = cleanPath.split('/');
 
@@ -71,8 +75,8 @@ README snippet: ${repoData.readme}
 Respond ONLY with a valid JSON object matching this schema:
 {
   "ghostGreeting": "A 1-2 sentence eerie greeting from the specter of this repo.",
-  "timeSinceDeath": "Human readable time since last commit (e.g. 4 years in darkness)",
-  "causeOfDeath": "A short dramatic diagnosis of why this codebase died (e.g. Abandoned dependencies, React breaking changes).",
+  "timeSinceDeath": "Human readable time since last commit",
+  "causeOfDeath": "A short dramatic diagnosis of why this codebase died.",
   "spectralDiagnosis": ["Point 1 about old bugs/outdated deps", "Point 2", "Point 3"],
   "resurrectionRitual": ["Terminal step 1 to revive code", "Terminal step 2", "Terminal step 3"],
   "patchPreview": "A small code snippet or command patch to fix the biggest issue."
@@ -88,20 +92,19 @@ Respond ONLY with a valid JSON object matching this schema:
     res.json({ success: true, repo: repoData, ghostAnalysis });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message || 'Failed to summon the specter.' });
+    console.error('Summon error:', err);
+    res.status(500).json({ error: err.message || 'Failed to summon specter.' });
   }
 });
 
-// Interactive Séance Chat Endpoint
 app.post('/api/seance-chat', async (req, res) => {
   try {
-    const { repoName, question, history } = req.body;
+    const { repoName, question, history = [] } = req.body;
     
     const messages = [
       { 
         role: 'system', 
-        content: `You are the Ghost of the abandoned repo "${repoName}". Answer the developer's question in a eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
+        content: `You are the Ghost of the abandoned repo "${repoName}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
       },
       ...history,
       { role: 'user', content: question }
@@ -114,6 +117,7 @@ app.post('/api/seance-chat', async (req, res) => {
 
     res.json({ success: true, reply: completion.choices[0].message.content });
   } catch (err) {
+    console.error('Chat error:', err);
     res.status(500).json({ error: 'The spectral link was severed.' });
   }
 });
