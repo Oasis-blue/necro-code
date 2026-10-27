@@ -139,7 +139,7 @@ app.post('/api/seance-chat', async (req, res) => {
     const messages = [
       { 
         role: 'system', 
-        content: `You are the Ghost of the abandoned repo "${repoName}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
+        content: `You are the Ghost of the abandoned repo "${repoName}". The current year is ${new Date().getFullYear()}. Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
       },
       ...cleanHistory,
       { role: 'user', content: String(question).trim() }
