@@ -108,33 +108,38 @@ Respond ONLY with a valid JSON object matching this schema:
 
 app.post('/api/seance-chat', async (req, res) => {
   try {
-    console.log("SEANCE CHAT REQUEST BODY:", JSON.stringify(req.body));
-    const { repoName, history = [] } = req.body;
+    const rawMessages = req.body.messages || req.body.history || [];
+    const rawRepo = req.body.repoName || req.body.repoUrl || 'this repository';
+    const repoName = rawRepo.replace('https://github.com/', '');
 
+    // Extract latest user question from standalone field OR last item in messages array
     let question = req.body.question || req.body.message || req.body.prompt;
-    if (!question && Array.isArray(history) && history.length > 0) {
-      const lastMsg = history[history.length - 1];
-      if (lastMsg) question = lastMsg.content || lastMsg.text;
+    
+    let historyToClean = Array.isArray(rawMessages) ? [...rawMessages] : [];
+
+    if (!question && historyToClean.length > 0) {
+      const lastMsg = historyToClean[historyToClean.length - 1];
+      if (lastMsg && (lastMsg.role === 'user' || lastMsg.sender === 'user')) {
+        question = lastMsg.content || lastMsg.text;
+        historyToClean.pop(); // Remove user question from history stack so it isn't duplicated
+      }
     }
 
     if (!question) {
       return res.status(400).json({ error: 'Question is required.' });
     }
 
-    const cleanHistory = Array.isArray(history) 
-      ? history
-          .slice(0, -1) // Exclude the last message if it was the question itself
-          .map(msg => ({
-            role: (msg.role || msg.sender) === 'user' ? 'user' : 'assistant',
-            content: (msg.content || msg.text || '').trim()
-          }))
-          .filter(msg => msg.content.length > 0)
-      : [];
+    const cleanHistory = historyToClean
+      .map(msg => ({
+        role: (msg.role === 'ghost' || msg.sender === 'ghost' || msg.role === 'assistant') ? 'assistant' : 'user',
+        content: String(msg.content || msg.text || '').trim()
+      }))
+      .filter(msg => msg.content.length > 0);
 
     const messages = [
       { 
         role: 'system', 
-        content: `You are the Ghost of the abandoned repo "${repoName || 'this repository'}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
+        content: `You are the Ghost of the abandoned repo "${repoName}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
       },
       ...cleanHistory,
       { role: 'user', content: String(question).trim() }
