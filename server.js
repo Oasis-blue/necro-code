@@ -5,7 +5,6 @@ const Groq = require('groq-sdk');
 
 const app = express();
 
-// Enable full CORS for all origins and headers
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -17,35 +16,35 @@ app.use(express.json());
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 async function fetchRepoDetails(owner, repo) {
+  const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+    headers: { 'User-Agent': 'NecroCode-App' }
+  });
+  
+  if (!metaRes.ok) throw new Error(`Repository ${owner}/${repo} not found in the mortal realm.`);
+  const meta = await metaRes.json();
+  const defaultBranch = meta.default_branch || 'main';
+
+  let readme = '';
+  let packageJson = '';
+
   try {
-    const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
-    if (!metaRes.ok) throw new Error('Repository not found in the mortal realm');
-    const meta = await metaRes.json();
+    const readmeRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/README.md`);
+    readme = readmeRes.ok ? await readmeRes.text() : '';
+  } catch (e) {}
 
-    let readme = '';
-    let packageJson = '';
+  try {
+    const pkgRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/package.json`);
+    packageJson = pkgRes.ok ? await pkgRes.text() : '';
+  } catch (e) {}
 
-    try {
-      const readmeRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`);
-      readme = readmeRes.ok ? await readmeRes.text() : '';
-    } catch (e) {}
-
-    try {
-      const pkgRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/package.json`);
-      packageJson = pkgRes.ok ? await pkgRes.text() : '';
-    } catch (e) {}
-
-    return {
-      name: meta.full_name,
-      description: meta.description || 'No description left behind.',
-      stars: meta.stargazers_count,
-      lastPushed: meta.pushed_at,
-      readme: readme.slice(0, 1500),
-      packageJson: packageJson.slice(0, 1000)
-    };
-  } catch (err) {
-    throw err;
-  }
+  return {
+    name: meta.full_name,
+    description: meta.description || 'No description left behind.',
+    stars: meta.stargazers_count,
+    lastPushed: meta.pushed_at,
+    readme: readme.slice(0, 1500),
+    packageJson: packageJson.slice(0, 1000)
+  };
 }
 
 app.post('/api/summon', async (req, res) => {
@@ -54,12 +53,13 @@ app.post('/api/summon', async (req, res) => {
     if (!repoUrl) return res.status(400).json({ error: 'Provide a repo URL (e.g., owner/repo)' });
 
     const cleanPath = repoUrl.replace('https://github.com/', '').replace('.git', '').trim();
-    const [owner, repo] = cleanPath.split('/');
-
-    if (!owner || !repo) {
+    const parts = cleanPath.split('/').filter(Boolean);
+    
+    if (parts.length < 2) {
       return res.status(400).json({ error: 'Invalid repo format. Use owner/repo' });
     }
 
+    const [owner, repo] = parts;
     const repoData = await fetchRepoDetails(owner, repo);
 
     const prompt = `You are the Ghost of the abandoned GitHub repository "${repoData.name}". 
@@ -92,7 +92,7 @@ Respond ONLY with a valid JSON object matching this schema:
     res.json({ success: true, repo: repoData, ghostAnalysis });
 
   } catch (err) {
-    console.error('Summon error:', err);
+    console.error('Summon error:', err.message);
     res.status(500).json({ error: err.message || 'Failed to summon specter.' });
   }
 });
@@ -117,7 +117,7 @@ app.post('/api/seance-chat', async (req, res) => {
 
     res.json({ success: true, reply: completion.choices[0].message.content });
   } catch (err) {
-    console.error('Chat error:', err);
+    console.error('Chat error:', err.message);
     res.status(500).json({ error: 'The spectral link was severed.' });
   }
 });
