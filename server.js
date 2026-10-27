@@ -110,12 +110,21 @@ app.post('/api/seance-chat', async (req, res) => {
   try {
     const { repoName, question, history = [] } = req.body;
     
+    const cleanHistory = Array.isArray(history) 
+      ? history
+          .filter(msg => msg && msg.text && (msg.sender === 'user' || msg.sender === 'ghost' || msg.role))
+          .map(msg => ({
+            role: msg.role || (msg.sender === 'user' ? 'user' : 'assistant'),
+            content: msg.content || msg.text || ''
+          }))
+      : [];
+
     const messages = [
       { 
         role: 'system', 
         content: `You are the Ghost of the abandoned repo "${repoName}". Answer the developer's question in an eerie, witty, haunting tone while providing genuine, accurate technical advice.` 
       },
-      ...history,
+      ...cleanHistory,
       { role: 'user', content: question }
     ];
 
