@@ -21,47 +21,38 @@ async function fetchRepoDetails(owner, repo) {
     headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
   }
 
-  try {
-    const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
-    
-    if (metaRes.ok) {
-      const meta = await metaRes.json();
-      const defaultBranch = meta.default_branch || 'main';
-
-      let readme = '';
-      let packageJson = '';
-
-      try {
-        const readmeRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/README.md`);
-        readme = readmeRes.ok ? await readmeRes.text() : '';
-      } catch (e) {}
-
-      try {
-        const pkgRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/package.json`);
-        packageJson = pkgRes.ok ? await pkgRes.text() : '';
-      } catch (e) {}
-
-      return {
-        name: meta.full_name,
-        description: meta.description || 'An ancient abandoned software artifact.',
-        stars: meta.stargazers_count || 1337,
-        lastPushed: meta.pushed_at || '2019-10-31T00:00:00Z',
-        readme: readme.slice(0, 1500) || 'README faded into the ether.',
-        packageJson: packageJson.slice(0, 1000) || 'No package.json survived.'
-      };
+  const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+  
+  if (!metaRes.ok) {
+    if (metaRes.status === 404) {
+      throw new Error(`Repository '${owner}/${repo}' was not found on GitHub.`);
     }
-  } catch (err) {
-    console.log('GitHub API fetch failed/limited, using specter fallback metadata:', err.message);
+    console.log(`GitHub API status ${metaRes.status}, attempting raw branch reads.`);
   }
 
-  // Fallback metadata if GitHub API rate-limits the request
+  const meta = metaRes.ok ? await metaRes.json() : {};
+  const defaultBranch = meta.default_branch || 'main';
+
+  let readme = '';
+  let packageJson = '';
+
+  try {
+    const readmeRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/README.md`);
+    readme = readmeRes.ok ? await readmeRes.text() : '';
+  } catch (e) {}
+
+  try {
+    const pkgRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/package.json`);
+    packageJson = pkgRes.ok ? await pkgRes.text() : '';
+  } catch (e) {}
+
   return {
-    name: `${owner}/${repo}`,
-    description: `An ancient open-source project created by ${owner}, now lost in digital oblivion.`,
-    stars: 842,
-    lastPushed: '2020-04-15T12:00:00Z',
-    readme: `Legacy repository ${owner}/${repo}. Abandoned state container / utility library.`,
-    packageJson: `{ "name": "${repo}", "version": "0.1.0", "deprecated": true }`
+    name: meta.full_name || `${owner}/${repo}`,
+    description: meta.description || 'An unmaintained software artifact.',
+    stars: meta.stargazers_count || 0,
+    lastPushed: meta.pushed_at || 'Unknown date',
+    readme: readme.slice(0, 1500) || 'No README found.',
+    packageJson: packageJson.slice(0, 1000) || 'No package.json found.'
   };
 }
 
@@ -102,7 +93,7 @@ Respond ONLY with a valid JSON object matching this schema:
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'gemma2-9b-it',
+      model: 'llama-3.1-8b-instant',
       response_format: { type: 'json_object' }
     });
 
@@ -130,7 +121,7 @@ app.post('/api/seance-chat', async (req, res) => {
 
     const completion = await groq.chat.completions.create({
       messages,
-      model: 'gemma2-9b-it'
+      model: 'llama-3.1-8b-instant'
     });
 
     res.json({ success: true, reply: completion.choices[0].message.content });
