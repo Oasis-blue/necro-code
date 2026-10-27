@@ -93,7 +93,7 @@ Respond ONLY with a valid JSON object matching this schema:
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       response_format: { type: 'json_object' }
     });
 
@@ -121,7 +121,7 @@ app.post('/api/seance-chat', async (req, res) => {
 
     const completion = await groq.chat.completions.create({
       messages,
-      model: 'llama-3.3-70b-versatile'
+      model: 'openai/gpt-oss-120b'
     });
 
     res.json({ success: true, reply: completion.choices[0].message.content });
